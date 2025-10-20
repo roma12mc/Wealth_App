@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "ratios": {
+    "Main (Needs)": 40.0,
+    "Savings": 20.0,
+    "Investments": 30.0,
+    "Fun": 10.0
+  }
+}
