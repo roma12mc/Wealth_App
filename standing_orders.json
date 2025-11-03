@@ -1,0 +1,11 @@
+[
+  {
+    "type": "Income",
+    "amount": 40.0,
+    "note": "Pocket Money",
+    "frequency": "Monthly",
+    "next_execution": "2025-11-04",
+    "account": "Auto-Split",
+    "use_auto": true
+  }
+]

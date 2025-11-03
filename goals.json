@@ -1,0 +1,19 @@
+[
+  {
+    "name": "Untitled Goal",
+    "target": 500.0,
+    "current": 0.0,
+    "streak_count": 0,
+    "last_contribution_date": null,
+    "milestones_hit": [
+      25
+    ],
+    "history": [
+      {
+        "date": "2025-10-19",
+        "amount": 509.63000000000005
+      }
+    ],
+    "allocated_from": "Main (Needs)"
+  }
+]
