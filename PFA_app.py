@@ -7,6 +7,13 @@ from datetime import datetime, timedelta, date
 import pandas as pd
 import plotly.express as px
 
+st.set_page_config(
+    page_title="Wealthy",
+    page_icon="🏦",
+    layout="centered",
+    initial_sidebar_state="auto"
+)
+
 # ----------------------
 # Basic JSON helpers
 # ----------------------
@@ -53,6 +60,12 @@ def load_user():
 
 def save_user(user):
     save_json(USER_FILE, user)
+
+def update_user_profile(new_data: dict):
+    """Update user profile data safely and prepare for AI integration."""
+    user_data = st.session_state.get("user_data", {})
+    user_data.update(new_data)
+    st.session_state.user_data = user_data
 
 # --- Goals helpers ---
 def load_goals():
@@ -149,9 +162,9 @@ if _existing:
 # --- Sidebar navigation ---
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Profile"
-
+st.sidebar.markdown("🏦  **Wealthy** ")
 page = st.sidebar.radio(
-    "Go to",
+    "Navigation",
     ["Profile", "Goals", "Dashboard", "Transactions", "Accounts"],
     index=["Profile", "Goals", "Dashboard", "Transactions", "Accounts"].index(st.session_state.current_page),
 )
@@ -161,23 +174,41 @@ if page != st.session_state.current_page:
 
 # --- Onboarding ---
 def onboarding():
-    st.title("Welcome to Wealth System Game 💰")
-    st.write("Before we start, answer three quick questions to personalize your experience:")
+    st.title("Welcome to Wealthy 🏦")
+    st.write("**Before we start, answer three quick questions to personalize your experience:**")
+    st.caption("*By sharing your vision and financial goals, Wealthy can tailor tips, insights, and challenges to help unlock your unique path to financial independence faster.*")
+    
+    vision = st.text_input(
+        "1️⃣ What do you hope to achieve with this app?",
+        placeholder="My dream is to be financially independent"
+    )
 
-    vision = st.text_input("1️⃣ What do you hope to achieve with this app?")
-    goals_text = st.text_area("2️⃣ What are your 3 main financial goals?")
-    relationship = st.text_input("3️⃣ What do you want your relationship to money to be like?")
+    goals_text = st.text_area(
+        "2️⃣ What are your 3 main financial goals?",
+        placeholder="Use a numbered list like 1) Buy a house. 2) Retire at 60. 3) Invest $200/month."
+        
+    )
+
+    relationship = st.text_input(
+        "3️⃣ What do you want your relationship to money to be like?",
+        placeholder="Healthy, mindful, and stress-free"
+    )
 
     if st.button("Save & Continue"):
-        user = {
-            "vision": vision,
-            "goals": goals_text,
-            "relationship": relationship,
-        }
-        st.session_state.user_data = user
-        save_user(user)
-        st.session_state.onboarded = True
-        st.success("Profile created successfully! Go to your Profile page to view or edit your answers.")
+        if not vision or not goals_text or not relationship:
+            st.error("Please fill out all fields before continuing.")
+        else:
+            user = {
+                "vision": vision,
+                "goals": goals_text,
+                "relationship": relationship,
+                "personalized_tips": [],         # list to store AI-generated tips
+                "badges": [] 
+            }
+            st.session_state.user_data = user
+            save_user(user)
+            st.session_state.onboarded = True
+            st.success("🎉 Congratulations on completing your onboarding! Your path to wealth and freedom is underway.")
 
 # ---------------------------
 # Notification / Badges (Day 11)
@@ -361,7 +392,8 @@ if not st.session_state.onboarded:
 else:
     # Profile page
     if page == "Profile":
-        st.title("Your Wealth Profile 💼")
+        st.markdown("<h1 style='text-align:center;'>💼 Your Wealthy Profile</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center;'>Track, view, or update your ultimate vision, goals, and money mindset here.</p>", unsafe_allow_html=True)
         st.write("You can view or edit your answers here:")
         user = load_user() or st.session_state.user_data
         vision_val = user.get("vision", "")
@@ -373,10 +405,11 @@ else:
             relationship = st.text_input("Your Relationship to Money", value=relationship_val)
             submitted = st.form_submit_button("Update Profile")
             if submitted:
-                new_user = {"vision": vision, "goals": goals_text, "relationship": relationship}
+                new_user = {"vision": vision, "goals": goals_text, "relationship": relationship, "personalized_tips": [],         # list to store AI-generated tips
+                            "badges": [] }
                 save_user(new_user)
                 st.session_state.user_data = new_user
-                st.success("Profile updated!")
+                st.success("🎉 Your Wealthy profile was updated — keep building your path to financial freedom!")
 
     if page == "Goals":
     
