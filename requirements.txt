@@ -1,3 +1,9 @@
 streamlit
+json
+math
+os
+datetime
+pandas
+plotly.expres
 pandas
 plotly
