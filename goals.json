@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Emergency Fund",
+    "target": 500.0,
+    "current": 400.9,
+    "allocated_from": "Savings",
+    "streak_count": 0,
+    "last_contribution_date": null,
+    "milestones_hit": [
+      25,
+      50,
+      75
+    ],
+    "history": [
+      {
+        "date": "2025-11-14",
+        "amount": 400.9
+      }
+    ]
+  }
+]

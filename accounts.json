@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Main (Needs)",
+    "balance": 1008.0,
+    "allocated": 0,
+    "auto_split": 0
+  },
+  {
+    "name": "Savings",
+    "balance": 404.0,
+    "allocated": 400.9,
+    "auto_split": 0
+  },
+  {
+    "name": "Investments",
+    "balance": 506.0,
+    "allocated": 0.0,
+    "auto_split": 0
+  },
+  {
+    "name": "Fun",
+    "balance": 302.0,
+    "allocated": 0.0,
+    "auto_split": 0
+  }
+]
