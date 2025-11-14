@@ -6,6 +6,10 @@ from math import ceil
 from datetime import datetime, timedelta, date
 import pandas as pd
 import plotly.express as px
+import cohere
+
+cohere_api_key = st.secrets["Textgen"]
+co = cohere.Client(cohere_api_key)
 
 st.set_page_config(
     page_title="Wealthy",
@@ -53,7 +57,20 @@ AUTO_SPLIT_FILE = "auto_split.json"
 BADGES_FILE = "badges.json"
 STATS_FILE = "stats.json"
 REMINDERS_FILE = "reminders.json"  # kept for future
+REPORTS_FILE = "monthly_reports.json"
 
+def load_reports():
+    if os.path.exists(REPORTS_FILE):
+        with open(REPORTS_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+    return {}
+
+def save_reports(reports):
+    with open(REPORTS_FILE, "w", encoding="utf-8") as f:
+        json.dump(reports, f, indent=2)
 # --- User helpers ---
 def load_user():
     return load_json(USER_FILE, None)
@@ -94,6 +111,30 @@ def load_auto_split():
 
 def save_auto_split(data):
     save_json(AUTO_SPLIT_FILE, data)
+
+def update_streak():
+    today = datetime.now().date()
+    last_date = st.session_state.last_visit_date
+
+    if last_date is None:
+        # First app open - start streak at 1
+        st.session_state.current_streak = 1
+        st.session_state.last_visit_date = today
+        return
+
+    days_diff = (today - last_date).days
+
+    if days_diff == 0:
+        # Already visited today, no change
+        return
+    elif days_diff == 1:
+        # Consecutive day, increment streak
+        st.session_state.current_streak += 1
+        st.session_state.last_visit_date = today
+    else:
+        # Missed day(s), reset streak
+        st.session_state.current_streak = 1
+        st.session_state.last_visit_date = today
 
 # --- Transactions helpers ---
 def load_transactions():
@@ -152,6 +193,28 @@ def format_euro(amount: float) -> str:
         return f"€{amount:,.2f}"
     except (ValueError, TypeError):
         return "€0.00"
+    
+def build_prompt(vision, goals, relationship):
+    return (
+        f"My vision: {vision}\n"
+        f"My financial goals: {goals}\n"
+        f"My relationship to money: {relationship}\n"
+        "Please provide 3 short, clear, and motivating financial tips, "
+        "each tip exactly one sentence, formatted in a numbered list like this:\n"
+        "1) Tip one.\n"
+        "2) Tip two.\n"
+        "3) Tip three."
+    )
+
+
+def get_personalized_tips(prompt):
+    response = co.chat(
+        model="command-a-03-2025",
+        message=prompt,
+        max_tokens=150,
+        temperature=0.7,
+    )
+    return response.text.strip()
 
 # --- Try to load existing profile at startup (so onboarding is skipped if file exists) ---
 _existing = load_user()
@@ -165,8 +228,8 @@ if "current_page" not in st.session_state:
 st.sidebar.markdown("🏦  **Wealthy** ")
 page = st.sidebar.radio(
     "Navigation",
-    ["Profile", "Goals", "Dashboard", "Transactions", "Accounts"],
-    index=["Profile", "Goals", "Dashboard", "Transactions", "Accounts"].index(st.session_state.current_page),
+    ["Profile", "Goals", "Dashboard", "Transactions", "Accounts", "Reports"],
+    index=["Profile", "Goals", "Dashboard", "Transactions", "Accounts", "Reports"].index(st.session_state.current_page),
 )
 
 if page != st.session_state.current_page:
@@ -198,17 +261,22 @@ def onboarding():
         if not vision or not goals_text or not relationship:
             st.error("Please fill out all fields before continuing.")
         else:
+            prompt = build_prompt(vision, goals_text, relationship)
+            ai_tips = get_personalized_tips(prompt)
             user = {
                 "vision": vision,
                 "goals": goals_text,
                 "relationship": relationship,
-                "personalized_tips": [],         # list to store AI-generated tips
-                "badges": [] 
+                "personalized_tips": ai_tips.split('\n'),
+                "badges": []
             }
             st.session_state.user_data = user
             save_user(user)
             st.session_state.onboarded = True
-            st.success("🎉 Congratulations on completing your onboarding! Your path to wealth and freedom is underway.")
+            st.success("🎉 Onboarding complete! Here are some personalized tips:")
+            st.title("Starter Tips:")
+            for tip in st.session_state.user_data["personalized_tips"]:
+                st.write("- " + tip)
 
 # ---------------------------
 # Notification / Badges (Day 11)
@@ -692,6 +760,19 @@ else:
                                 
     # Dashboard page (includes notifications & existing dashboard visuals)
     if page == "Dashboard":
+        # Load your actual data using your helpers:
+        transactions = load_transactions()
+        accounts = load_accounts()
+        goals = load_goals()
+
+# Prepare monthly income vs expense summary
+        if transactions:
+            df_tx = pd.DataFrame(transactions)
+            df_tx['timestamp'] = pd.to_datetime(df_tx['timestamp'])
+            df_tx['month'] = df_tx['timestamp'].dt.to_period('M')
+            monthly_summary = df_tx.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
+        else:
+            monthly_summary = pd.DataFrame()
         # Run notifications & badges at top
         show_notifications_and_badges_on_dashboard()
         st.markdown("<h1 style='text-align:center;'>💼 Wealth Dashboard</h1>", unsafe_allow_html=True)
@@ -729,34 +810,132 @@ else:
             monthly_summary = df_tx.groupby(['month', 'type'])['amount'].sum().unstack(fill_value=0)
             monthly_summary['Profit'] = monthly_summary.get('Income', 0) - monthly_summary.get('Expense', 0)
 
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Assuming transactions is a list/dict of your transaction data already loaded
+        df_tx = pd.DataFrame(transactions)
+        df_tx['timestamp'] = pd.to_datetime(df_tx['timestamp'])
 
-        # Calculate average contribution, longest streak
-        avg_contribution = 0.0
-        if df is not None and len(df) > 0:
-            avg_contribution = df["amount"].mean()
-        avg_streak = max(streaks) if streaks else 0
+# Find last Sunday (end of last week)
+        today = datetime.now().date()
+        last_sunday = today - timedelta(days=today.weekday() + 1)
+
+# Calculate cumulative balance at end of last week
+        def signed_amount(row):
+            return row['amount'] if row['type'] == 'Income' else -row['amount']
+
+        df_tx['signed_amount'] = df_tx.apply(signed_amount, axis=1)
+        prev_balance = df_tx[df_tx['timestamp'].dt.date <= last_sunday]['signed_amount'].sum()
+
+# Current total balance from your accounts list
+        current_balance = sum(acc.get("balance", 0.0) for acc in accounts)
+
+# Calculate delta compared to end of last week
+        delta_balance = current_balance - prev_balance
+# Example deltas for illustration (replace with actual logic)
+        col1.metric("💰 Total Balance", f"€{current_balance:,.2f}", delta=f"€{delta_balance:,.2f}")
+
+        col2.metric("📊 Percent Allocated", f"{percent_allocated:.1f}%", delta="")  # no delta for now
+
+# Monthly profit margin calculation with safe column access
+        if not monthly_summary.empty:
+            this_month = pd.Period(pd.Timestamp.now(), freq='M')
+            if this_month in monthly_summary.index:
+                monthly_income = monthly_summary.loc[this_month].get('Income', 0)
+                monthly_expense = monthly_summary.loc[this_month].get('Expense', 0)
+                monthly_profit = monthly_income - monthly_expense
+                profit_margin = (monthly_profit / monthly_income * 100) if monthly_income > 0 else 0
+            else:
+                profit_margin = 0.0
+        else:
+            profit_margin = 0.0
+        col3.metric("📈 Monthly Profit Margin", f"{profit_margin:.1f}%", delta="")
+        
+        # Load these from your persistent user data or initialize
+        if "last_visit_date" not in st.session_state:
+            st.session_state.last_visit_date = None
+        if "current_streak" not in st.session_state:
+            st.session_state.current_streak = 0
 
 
-        # Refined Wealth Index excluding avg goal completion, using percent allocated, avg streak, avg contribution, and profit margin
-        wealth_index = (percent_allocated * avg_streak * avg_contribution * (1 + profit_margin / 100)) / 1000
+# Call the update function once per app run
+        update_streak()
+# Current streak length calculation (example; adapt your logic)
+        col4.metric("🔥 Current Streak (days)", st.session_state.current_streak)
+        
+        # Helper function to normalize values between 0 and 1
+        def normalize(val, max_val):
+            if max_val == 0:
+                return 0
+            return min(val / max_val, 1.0)
 
-         # Wealth Index card - bigger font, colored background, centered text
-        wealth_card = f"""
-            <div style="
-                background-color:#4CAF50;
-                color:white;
-                padding:10px;
-                border-radius:10px;
-                text-align:center;
-                font-size:20px;
-                font-weight:bold;
-                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
-             ">
-             🏆 Wealth Index<br>{wealth_index:.1f}
-         </div>
-     """
-        st.markdown(wealth_card, unsafe_allow_html=True)
+# Metrics calculated elsewhere in your app:
+        transactions_count = len(transactions)
+        avg_goal_completion = 0
+        if goals:
+            avg_goal_completion = sum(min(float(g.get("current", 0)) / max(float(g.get("target", 1)), 1), 1.0) for g in goals) / len(goals)
+        profit_margin_positive = max(profit_margin, 0) / 100  # scale 0..1, treat negative as 0
+        streak_bonus = min(st.session_state.current_streak, 30)  # capped at 30 days
 
+# Compute Wealth Index as additive weighted sum
+        wealth_index = (
+            10 +                     # base value to avoid zero start
+            0.05 * transactions_count +
+            20 * avg_goal_completion +
+            40 * profit_margin_positive +
+            5 * streak_bonus
+        )
+        wealth_index = min(wealth_index, 100)  # cap at 100
+
+# Define tier and colors
+        if wealth_index >= 85:
+            tier = "Platinum"
+            color = "#7300ff"
+        elif wealth_index >= 65:
+            tier = "Gold"
+            color = "#ffd700"
+        elif wealth_index >= 40:
+            tier = "Silver"
+            color = "#c0c0c0"
+        else:
+            tier = "Bronze"
+            color = "#cd7f32"
+
+# Display Wealth Index card with color and styling
+        wealth_card_html = f"""
+        <div style="
+            background-color: {color};
+            color: black;
+            padding: 20px;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 28px;
+            font-weight: 700;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+            user-select: none;
+            cursor: default;
+        ">
+            🏆 Wealth Index: {wealth_index:.1f} / 100<br>
+            <small>{tier} Tier</small>
+        </div>
+        """
+
+        st.markdown(wealth_card_html, unsafe_allow_html=True)
+
+# Expander with detailed explanation
+        with st.expander("ℹ️ What is the Wealth Index? Click to learn more", expanded=False):
+            st.write("""
+            The Wealth Index is a progressive score that grows with your personal finance journey, rewarding consistency, progress, and positive results:
+    
+            - **Transactions**: Every transaction you log adds to your score, encouraging regular engagement.
+            - **Goal Completion**: Progress on your financial goals increases your Wealth Index.
+            - **Profit Margin**: Positive monthly profit margin strongly boosts your score.
+            - **Consistency Streak**: Maintaining a streak for up to 30 days gives you a bonus.
+    
+            This index is designed to grow steadily and fairly, without harsh penalties for occasional misses. It's capped at 100 for simplicity and divided into tiers (Bronze, Silver, Gold, Platinum) to motivate you towards higher achievements.
+            """)
+ 
         for g in goals:
             total_target += float(g.get("target", 0))
             total_current += float(g.get("current", 0))
@@ -767,16 +946,8 @@ else:
                     "date": h.get("date"),
                     "amount": h.get("amount", 0)
                 })
-                total_contributed += float(h.get("amount", 0))
-
-            st.divider()   
-    # Display KPIs
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("💰 Total Account Balance", f"{total_balance:,.2f} €")
-            col2.metric("🪙 Percent Allocated", f"{percent_allocated:.1f}%")
-            col3.metric("🔥 Longest Streak (days)", f"{avg_streak}")
-            col4.metric("💹 Monthly Profit Margin", f"{profit_margin:.1f}%")
-            
+                total_contributed += float(h.get("amount", 0))  
+    
             
 
             st.subheader("📊 Monthly Income and Expense Overview")
@@ -787,15 +958,19 @@ else:
             monthly_profit = monthly_summary.at[this_month, 'Profit'] if this_month in monthly_summary.index else 0
             profit_margin = (monthly_profit / monthly_income * 100) if monthly_income > 0 else 0
 
-    
-
-        # Goal progress overview
         if goals:
-            df_prog = pd.DataFrame([{"Goal": g["name"], "Progress": (g["current"] / g["target"] * 100) if g.get("target",0)>0 else 0} for g in goals])
-            fig_prog = px.bar(df_prog, x="Goal", y="Progress", text="Progress", title="Goal Completion (%)", range_y=[0,100])
-            fig_prog.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-            st.plotly_chart(fig_prog, use_container_width=True)
+            df_goals = pd.DataFrame({
+                "Goal": [g["name"] for g in goals],
+                "Progress": [(float(g["current"]) / float(g["target"]) * 100) if float(g.get("target",0)) > 0 else 0 for g in goals]
+            })
 
+            fig = px.bar(df_goals, x="Goal", y="Progress", text_auto='.1f', 
+                         title="Goal Completion (%)", range_y=[0,100],
+                         labels={"Progress": "Progress (%)"})
+            fig.update_traces(marker_color='mediumseagreen')
+            fig.update_layout(yaxis=dict(ticksuffix="%"), showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+   
     if page == "Accounts":
     
 
@@ -969,7 +1144,7 @@ else:
                         else:
                             st.error("Insufficient funds in source account.")
 
-        st.write("---")
+        
 # --- Transactions Page ---
     if page == "Transactions":
 
@@ -1204,3 +1379,126 @@ else:
                         standing_orders.pop(i)
                         save_json(STANDING_ORDERS_FILE, standing_orders)
                         st.success("Standing order deleted.")
+
+def aggregate_user_data():
+    transactions = load_transactions()
+    goals = load_goals()
+    accounts = load_accounts()
+
+    today = datetime.now()
+    month = today.month - 1 if today.month > 1 else 12
+    year = today.year if today.month > 1 else today.year - 1
+    start_last_month = datetime(year, month, 1)
+    end_last_month = datetime(today.year, today.month, 1)
+
+    monthly_txs = [
+        tx for tx in transactions
+        if start_last_month <= datetime.fromisoformat(tx['timestamp']) < end_last_month
+    ]
+
+    income = sum(tx['amount'] for tx in monthly_txs if tx['type'] == 'Income')
+    expenses = sum(tx['amount'] for tx in monthly_txs if tx['type'] == 'Expense')
+    profit = income - expenses
+
+    if goals:
+        goal_progress_percent = sum(
+            min(float(g.get('current', 0)) / float(g.get('target', 1)), 1) for g in goals
+        ) / len(goals) * 100
+    else:
+        goal_progress_percent = 0
+
+    total_allocated = sum(acc.get('allocated', 0) for acc in accounts)
+    allocation = {}
+    for acc in accounts:
+        category = acc.get('name', 'Other')
+        allocation[category] = round(acc.get('allocated', 0) / total_allocated * 100, 2) if total_allocated else 0
+
+    return profit, goal_progress_percent, allocation
+
+def display_report(report):
+    # Show the basic financial summary
+    st.write(f"**Profit/Loss:** €{report['profit']:.2f}")
+    st.write(f"**Goal Progress:** {report['goal_progress']:.1f}%")
+    st.write("**Fund Allocation:**")
+    for category, percent in report['allocation'].items():
+        st.write(f"- {category}: {percent}%")
+    st.markdown("---")
+    # Show the concise AI-generated analysis and tip
+    st.write("**Analysis & Tip:**")
+    st.write(report['analysis_and_tip'])
+
+def generate_monthly_report():
+    profit, goal_progress, allocation = aggregate_user_data()
+    prompt = build_prompt(profit, goal_progress, allocation)
+    response = co.chat(
+        model="command-a-03-2025",
+        message=prompt,
+        max_tokens=150,
+        temperature=0.7,
+    )
+    return {
+        "profit": profit,
+        "goal_progress": goal_progress,
+        "allocation": allocation,
+        "analysis_and_tip": response.text.strip()
+    }
+
+
+def reports():
+    st.markdown("<h1 style='text-align: center;'>📅 Monthly Reports</h1>", unsafe_allow_html=True)
+    st.caption("Get tailored insights each month to track your progress, optimize your spending, and confidently move closer to your financial goals.")
+    reports = load_reports()
+    current_month = datetime.now().strftime("%Y-%m")
+    today = datetime.now().day
+
+    # Calculate days until first day of next month
+    next_month = datetime(datetime.now().year + (1 if datetime.now().month == 12 else 0), (datetime.now().month % 12) + 1, 1)
+    days_until_next_report = (next_month - datetime.now()).days
+
+    if current_month in reports:
+        st.success(f"Showing this month's report ({current_month}). Next report will be available in {days_until_next_report} days.")
+        display_report(reports[current_month])
+        if st.button("Regenerate Report Now"):
+            with st.spinner("Regenerating monthly report..."):
+                report = generate_monthly_report()
+                reports[current_month] = report
+                save_reports(reports)
+            st.success("Monthly report regenerated!")
+            display_report(report)
+    else:
+        st.info(f"No report exists yet for this month ({current_month}). You can generate your monthly report now.")
+        if st.button("Generate Report Now"):
+            with st.spinner("Generating monthly report..."):
+                report = generate_monthly_report()
+                reports[current_month] = report
+                save_reports(reports)
+            st.success("Monthly report generated!")
+            display_report(report)
+
+    st.markdown("---")
+    st.markdown("<h3 style='text-align: center;'>📊 Past Reports History</h3>", unsafe_allow_html=True)
+
+    if reports:
+        # Sort months descending for display
+        months = sorted(reports.keys(), reverse=True)
+        # Build DataFrame with a user-friendly month year format
+        df_history = pd.DataFrame({
+            "Report Month": [datetime.strptime(m, "%Y-%m").strftime("%B %Y") for m in months],
+            "Key": months
+        })
+
+        st.dataframe(df_history[["Report Month"]], use_container_width=True)
+
+        selected_index = st.selectbox("Select Report to View", range(len(months)), format_func=lambda x: df_history.iloc[x]["Report Month"])
+
+        if selected_index is not None:
+            selected_key = df_history.iloc[selected_index]["Key"]
+            report = reports[selected_key]
+            st.markdown(f"## Report for {selected_key} ({df_history.iloc[selected_index]['Report Month']})")
+            display_report(report)
+    else:
+        st.info("No past reports available yet.")
+# Main app routing addition
+if st.session_state.onboarded:
+    if page == "Reports":
+        reports()
