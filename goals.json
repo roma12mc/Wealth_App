@@ -1,19 +1,21 @@
 [
   {
-    "name": "Untitled Goal",
+    "name": "Emergency Fund",
     "target": 500.0,
-    "current": 0.0,
+    "current": 400.9,
+    "allocated_from": "Savings",
     "streak_count": 0,
     "last_contribution_date": null,
     "milestones_hit": [
-      25
+      25,
+      50,
+      75
     ],
     "history": [
       {
-        "date": "2025-10-19",
-        "amount": 509.63000000000005
+        "date": "2025-11-14",
+        "amount": 400.9
       }
-    ],
-    "allocated_from": "Main (Needs)"
+    ]
   }
 ]
