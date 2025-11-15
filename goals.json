@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Cash Buffer",
+    "target": 100.0,
+    "current": 88.2,
+    "allocated_from": "Future Freedom Fund(FFF)",
+    "streak_count": 0,
+    "last_contribution_date": null,
+    "milestones_hit": [
+      25,
+      50,
+      75
+    ],
+    "history": [
+      {
+        "date": "2025-11-15",
+        "amount": 88.2
+      }
+    ]
+  }
+]

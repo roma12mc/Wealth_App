@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "ratios": {
+    "Investments": 40.0,
+    "Self-Investments": 30.0,
+    "Future Freedom Fund(FFF)": 20.0,
+    "Fun": 10.0
+  }
+}
