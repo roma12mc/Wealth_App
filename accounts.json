@@ -1,25 +1,25 @@
 [
   {
-    "name": "Main (Needs)",
-    "balance": 1008.0,
-    "allocated": 0,
-    "auto_split": 0
-  },
-  {
-    "name": "Savings",
-    "balance": 404.0,
-    "allocated": 400.9,
-    "auto_split": 0
-  },
-  {
     "name": "Investments",
-    "balance": 506.0,
+    "balance": 273.21999999999997,
     "allocated": 0.0,
     "auto_split": 0
   },
   {
+    "name": "Self-Investments",
+    "balance": 41.11,
+    "allocated": 0.0,
+    "auto_split": 0
+  },
+  {
+    "name": "Future Freedom Fund(FFF)",
+    "balance": 88.2,
+    "allocated": 88.2,
+    "auto_split": 0
+  },
+  {
     "name": "Fun",
-    "balance": 302.0,
+    "balance": 3.1,
     "allocated": 0.0,
     "auto_split": 0
   }

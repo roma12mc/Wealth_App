@@ -1,9 +1,9 @@
 {
   "enabled": true,
   "ratios": {
-    "Main (Needs)": 40.0,
-    "Savings": 20.0,
-    "Investments": 30.0,
+    "Investments": 40.0,
+    "Self-Investments": 30.0,
+    "Future Freedom Fund(FFF)": 20.0,
     "Fun": 10.0
   }
 }

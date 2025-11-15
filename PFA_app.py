@@ -1057,7 +1057,7 @@ else:
                     with st.expander(f"Edit {acc['name']}"):
                         new_name = st.text_input("Name", value=acc["name"], key=f"name_{i}")
                         new_balance = st.number_input("Balance (€)", min_value=0.0, value=acc["balance"], step=10.0, key=f"bal_{i}")
-                        new_alloc = st.number_input("Allocated (€)", min_value=0.0, value=acc.get("allocated", 0.0), step=10.0, key=f"alloc_{i}")
+                        new_alloc = st.number_input("Allocated (€)", min_value=0.0, value=float(acc.get("allocated", 0.0)), step=10.0, key=f"alloc_{i}")
 
                         col1, col2, col3 = st.columns(3)
                         with col1:

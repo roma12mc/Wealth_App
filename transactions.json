@@ -1,9 +1,9 @@
 [
   {
     "type": "Income",
-    "amount": 20.0,
+    "amount": 0.01,
     "note": "",
-    "timestamp": "2025-11-14T14:49:01.638323",
-    "account": "Auto-Split"
+    "timestamp": "2025-11-15T08:02:45.965115",
+    "account": "Investments"
   }
 ]
